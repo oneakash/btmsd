@@ -16,3 +16,5 @@ backend/keystore/
 
 # OS generated files
 .DS_Store
+vendor/
+chaincode-tender/vendor/
