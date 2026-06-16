@@ -212,7 +212,8 @@ func (c *TenderContract) PublishTender(ctx contractapi.TransactionContextInterfa
 	if err != nil { return err }
 	if exists { return fmt.Errorf("tender %s already exists", tenderId) }
 
-	tender := Tender{ TenderID: tenderId, Title: title, Budget: budget, Deadline: deadline, Status: "Published", DocHash: docHash }
+	// tender := Tender{ TenderID: tenderId, Title: title, Budget: budget, Deadline: deadline, Status: "Published", DocHash: docHash }
+	tender := Tender{ TenderID: tenderId, Title: title, Budget: budget, Deadline: deadline, Status: "Published", DocHash: docHash, WinnerID: "Pending", WinningBid: 0 }
 	tenderBytes, err := json.Marshal(tender)
 	if err != nil { return err }
 
@@ -309,6 +310,35 @@ func (c *TenderContract) TenderExists(ctx contractapi.TransactionContextInterfac
 	tenderBytes, err := ctx.GetStub().GetState("tender:" + tenderId)
 	if err != nil { return false, err }
 	return tenderBytes != nil, nil
+}
+
+// GetAllTenders retrieves all published and awarded tenders from the ledger
+func (c *TenderContract) GetAllTenders(ctx contractapi.TransactionContextInterface) ([]*Tender, error) {
+	// Query the ledger for all keys between "tender:" and "tender;"
+	// In ASCII, ';' comes immediately after ':', so this grabs all tender prefixes.
+	resultsIterator, err := ctx.GetStub().GetStateByRange("tender:", "tender;")
+	if err != nil {
+		return nil, err
+	}
+	defer resultsIterator.Close()
+
+	var tenders []*Tender
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, err
+		}
+
+		var tender Tender
+		err = json.Unmarshal(queryResponse.Value, &tender)
+		if err != nil {
+			return nil, err
+		}
+		
+		tenders = append(tenders, &tender)
+	}
+
+	return tenders, nil
 }
 
 func main() {
