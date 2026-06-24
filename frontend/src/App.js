@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import CryptoJS from 'crypto-js'; // NEW: Cryptography library
+// import CryptoJS from 'crypto-js'; // NEW: Cryptography library
 import './App.css';
 
 const translations = {
@@ -64,32 +64,46 @@ function App() {
 
   const t = translations[lang];
 
-  // NEW: Cryptographic File Hashing Function
-  const handleFileUpload = (e, formType) => {
+  // NEW: IPFS Web3 File Upload Function
+  const handleFileUpload = async (e, formType) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    setStatus({ message: 'Calculating cryptographic hash...', isError: false });
+    setStatus({ message: 'Uploading document to global IPFS network...', isError: false });
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      // 1. Read the file into memory as an ArrayBuffer
-      const arrayBuffer = event.target.result;
-      // 2. Convert to a format CryptoJS understands
-      const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
-      // 3. Calculate the mathematical SHA-256 hash
-      const hash = CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
+    // Prepare the file for Pinata
+    const formData = new FormData();
+    formData.append('file', file);
 
-      // 4. Update the forms with the calculated hash
+    const pinataOptions = JSON.stringify({ cidVersion: 0 });
+    formData.append('pinataOptions', pinataOptions);
+
+    try {
+      // Send directly to IPFS via Pinata
+      const res = await axios.post("https://api.pinata.cloud/pinning/pinFileToIPFS", formData, {
+        maxBodyLength: "Infinity",
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${formData._boundary}`,
+          'pinata_api_key': process.env.REACT_APP_PINATA_API_KEY,
+          'pinata_secret_api_key': process.env.REACT_APP_PINATA_SECRET_API_KEY,
+        }
+      });
+
+      const ipfsCID = res.data.IpfsHash; // This is your global Web3 Hash!
+
+      // Update forms with the CID
       if (formType === 'tender') {
-        setTenderForm({ ...tenderForm, docHash: hash });
+        setTenderForm({ ...tenderForm, docHash: ipfsCID });
       } else if (formType === 'bid') {
-        setBidForm({ ...bidForm, docHash: hash });
+        setBidForm({ ...bidForm, docHash: ipfsCID });
       }
       
-      setStatus({ message: `Hash generated successfully: ${hash.substring(0, 15)}...`, isError: false });
-    };
-    reader.readAsArrayBuffer(file);
+      setStatus({ message: `Secured on IPFS! CID: ${ipfsCID.substring(0, 15)}...`, isError: false });
+
+    } catch (error) {
+      console.error("IPFS Upload Error:", error);
+      setStatus({ message: "Failed to upload to IPFS. Check your Pinata API keys.", isError: true });
+    }
   };
 
   const fetchTenders = async () => {
@@ -175,6 +189,7 @@ function App() {
                 <th style={{ padding: '12px', textAlign: 'left' }}>{t.tenderTitle}</th>
                 <th style={{ padding: '12px', textAlign: 'left' }}>{t.tableStatus}</th>
                 <th style={{ padding: '12px', textAlign: 'left' }}>{t.tableWinner}</th>
+                <th style={{ padding: '12px', textAlign: 'center' }}>Document</th> {/* NEW Column*/}
               </tr>
             </thead>
             <tbody>
@@ -186,6 +201,18 @@ function App() {
                     <span style={{ padding: '4px 8px', borderRadius: '4px', background: tender.status === 'Awarded' ? '#d4edda' : '#fff3cd', color: tender.status === 'Awarded' ? '#155724' : '#856404', fontSize: '14px', fontWeight: 'bold' }}>{tender.status}</span>
                   </td>
                   <td style={{ padding: '12px', fontWeight: 'bold', color: '#0056b3' }}>{tender.winnerId || '-'}</td>
+                  
+                  {/* NEW: Clickable IPFS Gateway Link */}
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    <a 
+                      href={`https://gateway.pinata.cloud/ipfs/${tender.docHash}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ background: '#6c757d', color: 'white', padding: '5px 10px', textDecoration: 'none', borderRadius: '4px', fontSize: '12px' }}
+                    >
+                      View PDF
+                    </a>
+                  </td>
                 </tr>
               ))}
             </tbody>
