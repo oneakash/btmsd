@@ -213,7 +213,7 @@ function App() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <button onClick={() => setLang(lang === 'en' ? 'bn' : 'en')} style={{ padding: '8px', cursor: 'pointer' }}>{lang === 'en' ? 'বাংলা' : 'English'}</button>
-          <button onClick={() => { setUserRole(null); setStatus({message:''}); }} style={{ padding: '8px', background: '#dc3545', color: 'white', border: 'none', cursor: 'pointer' }}>{t.logout}</button>
+          <button onClick={handleLogout} style={{ padding: '8px', background: '#dc3545', color: 'white', border: 'none', cursor: 'pointer' }}>{t.logout}</button>
         </div>
       </div>
       
