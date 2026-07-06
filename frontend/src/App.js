@@ -63,6 +63,11 @@ function App() {
   const [lang, setLang] = useState('en');
   // NEW: Authentication State
   const [userRole, setUserRole] = useState(null); // 'admin' or 'vendor'
+  // NEW: Registration & OTP State
+  const [authView, setAuthView] = useState('login'); // Can be 'login', 'register', or 'otp'
+  const [regForm, setRegForm] = useState({ companyName: '', email: '', password: '' });
+  const [verifyEmail, setVerifyEmail] = useState('');
+  const [otpCode, setOtpCode] = useState('');
   const [activeTab, setActiveTab] = useState('view'); 
   const [status, setStatus] = useState({ message: '', isError: false });
   const [tenders, setTenders] = useState([]);
@@ -72,6 +77,32 @@ function App() {
   const [evalForm, setEvalForm] = useState({ tenderId: '' });
 
   const t = translations[lang];
+
+  // NEW: Registration Functions
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setStatus({ message: 'Registering and sending OTP to your email...', isError: false });
+    try {
+      const res = await axios.post('http://localhost:5000/api/auth/register', regForm);
+      setVerifyEmail(regForm.email); // Save the email so we know who to verify
+      setAuthView('otp');            // Switch the screen to the OTP view
+      setStatus({ message: res.data.message, isError: false });
+    } catch (err) {
+      setStatus({ message: err.response?.data?.message || err.message, isError: true });
+    }
+  };
+
+  const handleVerifyOTP = async (e) => {
+    e.preventDefault();
+    setStatus({ message: 'Verifying OTP...', isError: false });
+    try {
+      const res = await axios.post('http://localhost:5000/api/auth/verify-email', { email: verifyEmail, otp: otpCode });
+      setAuthView('login');          // Send them back to login once verified
+      setStatus({ message: res.data.message, isError: false });
+    } catch (err) {
+      setStatus({ message: err.response?.data?.message || err.message, isError: true });
+    }
+  };
 
   const handleServerLogin = async (selectedRole) => {
     try {
@@ -176,25 +207,66 @@ function App() {
     }
   };
 
-  // NEW: Login Screen Render
+  // SECURED DYNAMIC AUTHENTICATION SCREEN
   if (!userRole) {
     return (
-      <div style={{ padding: '60px 40px', fontFamily: 'Arial, sans-serif', maxWidth: '500px', margin: 'auto', textAlign: 'center' }}>
-        <button onClick={() => setLang(lang === 'en' ? 'bn' : 'en')} style={{ position: 'absolute', top: 20, right: 20, padding: '8px' }}>
-          {lang === 'en' ? 'বাংলা' : 'English'}
-        </button>
-        <h2 style={{ color: '#0056b3' }}>{t.title}</h2>
-        <p style={{ color: 'gray', marginBottom: '40px' }}>{t.subtitle}</p>
-        
-        <h3>{t.loginTitle}</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' }}>
-          <button onClick={() => handleServerLogin('admin')} style={{ padding: '15px', fontSize: '16px', background: '#28a745', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '5px' }}>
-            🏢 {t.roleAdmin}
-          </button>
-          <button onClick={() => handleServerLogin('vendor')} style={{ padding: '15px', fontSize: '16px', background: '#17a2b8', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '5px' }}>
-            🤝 {t.roleVendor}
-          </button>
-        </div>
+      <div style={{ padding: '60px 40px', fontFamily: 'Arial, sans-serif', maxWidth: '500px', margin: 'auto', textAlign: 'center', background: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '8px', marginTop: '50px' }}>
+        <h2 style={{ color: '#0056b3', marginBottom: '5px' }}>{t.title}</h2>
+        <p style={{ color: 'gray', marginBottom: '20px' }}>Security & Authentication Portal</p>
+
+        {status.message && (
+          <div style={{ marginBottom: '20px', padding: '10px', background: status.isError ? '#f8d7da' : '#d4edda', color: status.isError ? '#721c24' : '#155724', borderRadius: '5px', fontSize: '14px' }}>
+            {status.message}
+          </div>
+        )}
+
+        {/* VIEW 1: LOGIN */}
+        {authView === 'login' && (
+          <div>
+            <h3>{t.loginTitle}</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' }}>
+              <button onClick={() => handleServerLogin('admin')} style={{ padding: '15px', fontSize: '16px', background: '#28a745', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '5px', fontWeight: 'bold' }}>🏢 {t.roleAdmin}</button>
+              <button onClick={() => handleServerLogin('vendor')} style={{ padding: '15px', fontSize: '16px', background: '#17a2b8', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '5px', fontWeight: 'bold' }}>🤝 {t.roleVendor}</button>
+            </div>
+            <p style={{ marginTop: '25px', fontSize: '14px' }}>
+              New Vendor? <span style={{ color: '#0056b3', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline' }} onClick={() => { setAuthView('register'); setStatus({message:''}); }}>Register Here</span>
+            </p>
+          </div>
+        )}
+
+        {/* VIEW 2: REGISTRATION */}
+        {authView === 'register' && (
+          <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '12px', textAlign: 'left' }}>
+            <h3 style={{ textAlign: 'center', marginBottom: '10px' }}>Vendor Registration</h3>
+            
+            <label style={{ fontWeight: 'bold', fontSize: '14px' }}>Company Name</label>
+            <input required style={{ padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setRegForm({...regForm, companyName: e.target.value})} />
+            
+            <label style={{ fontWeight: 'bold', fontSize: '14px' }}>Email Address</label>
+            <input type="email" required style={{ padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setRegForm({...regForm, email: e.target.value})} />
+            
+            <label style={{ fontWeight: 'bold', fontSize: '14px' }}>Password</label>
+            <input type="password" required style={{ padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setRegForm({...regForm, password: e.target.value})} />
+            
+            <button type="submit" style={{ padding: '15px', background: '#17a2b8', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold', borderRadius: '5px', marginTop: '10px' }}>Register & Get OTP</button>
+            
+            <p style={{ textAlign: 'center', marginTop: '15px', fontSize: '14px' }}>
+              Already registered? <span style={{ color: '#0056b3', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline' }} onClick={() => { setAuthView('login'); setStatus({message:''}); }}>Back to Login</span>
+            </p>
+          </form>
+        )}
+
+        {/* VIEW 3: OTP VERIFICATION */}
+        {authView === 'otp' && (
+          <form onSubmit={handleVerifyOTP} style={{ display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'center' }}>
+            <h3>Verify Your Identity</h3>
+            <p style={{ color: 'gray', fontSize: '14px', marginBottom: '10px' }}>We sent a 6-digit verification code to<br/><b>{verifyEmail}</b></p>
+            
+            <input required maxLength="6" placeholder="000000" style={{ padding: '15px', fontSize: '24px', textAlign: 'center', letterSpacing: '8px', border: '2px solid #17a2b8', borderRadius: '5px', fontWeight: 'bold' }} onChange={e => setOtpCode(e.target.value)} />
+            
+            <button type="submit" style={{ padding: '15px', background: '#28a745', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold', borderRadius: '5px', marginTop: '10px' }}>Verify Account</button>
+          </form>
+        )}
       </div>
     );
   }
