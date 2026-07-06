@@ -7,10 +7,26 @@ const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const { verifyRole, JWT_SECRET } = require('./authMiddleware');
+const bcrypt = require('bcryptjs');
+const nodemailer = require('nodemailer');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// 1. Temporary Off-Chain Database for Users
+// (In production, this would be MongoDB or PostgreSQL)
+const usersDB = []; 
+
+// 2. Configure the Email Sender
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
 
 // --- Fabric Network Configuration ---
 const channelName = 'tenderchannel';
@@ -68,6 +84,67 @@ async function getContract() {
 // ==========================================
 //                 API ROUTES
 // ==========================================
+
+// 3. REGISTRATION ROUTE
+app.post('/api/auth/register', async (req, res) => {
+  const { companyName, email, password } = req.body;
+
+  // Check if user already exists
+  if (usersDB.find(u => u.email === email)) {
+    return res.status(400).json({ success: false, message: "Email already registered" });
+  }
+
+  // Cryptographically hash the password (never store plain text!)
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  // Generate a random 6-digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+  // Save to database with UNVERIFIED status
+  const newUser = {
+    companyName,
+    email,
+    password: hashedPassword,
+    role: 'vendor',
+    status: 'UNVERIFIED', 
+    otp: otp,
+    docHash: null
+  };
+  usersDB.push(newUser);
+
+  // Send the verification email
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: 'BTMS: Verify Your Vendor Account',
+    text: `Welcome to BTMS, ${companyName}! Your registration verification code is: ${otp}`
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    res.json({ success: true, message: "Registration successful. Please check your email for the OTP." });
+  } catch (error) {
+    console.error("Email error:", error);
+    res.status(500).json({ success: false, message: "Failed to send verification email." });
+  }
+});
+
+// 4. OTP VERIFICATION ROUTE
+app.post('/api/auth/verify-email', (req, res) => {
+  const { email, otp } = req.body;
+
+  const user = usersDB.find(u => u.email === email);
+  
+  if (!user) return res.status(404).json({ success: false, message: "User not found" });
+  if (user.otp !== otp) return res.status(400).json({ success: false, message: "Invalid OTP" });
+
+  // Update status and clear the OTP
+  user.status = 'PENDING_DOCS';
+  user.otp = null;
+
+  res.json({ success: true, message: "Email verified successfully! Please upload your compliance documents." });
+});
 
 // Login Route to generate the JWT Badge
 app.post('/api/auth/login', (req, res) => {
@@ -257,81 +334,4 @@ app.get('/api/tenders', async (req, res) => {
 const PORT = 5000;
 app.listen(PORT, () => {
     console.log(`✅ BTMS Backend API is running on http://localhost:${PORT}`);
-});
-
-const bcrypt = require('bcryptjs');
-const nodemailer = require('nodemailer');
-
-// 1. Temporary Off-Chain Database for Users
-// (In production, this would be MongoDB or PostgreSQL)
-const usersDB = []; 
-
-// 2. Configure the Email Sender
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
-
-// 3. REGISTRATION ROUTE
-app.post('/api/auth/register', async (req, res) => {
-  const { companyName, email, password } = req.body;
-
-  // Check if user already exists
-  if (usersDB.find(u => u.email === email)) {
-    return res.status(400).json({ success: false, message: "Email already registered" });
-  }
-
-  // Cryptographically hash the password (never store plain text!)
-  const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hash(password, salt);
-
-  // Generate a random 6-digit OTP
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-  // Save to database with UNVERIFIED status
-  const newUser = {
-    companyName,
-    email,
-    password: hashedPassword,
-    role: 'vendor',
-    status: 'UNVERIFIED', 
-    otp: otp,
-    docHash: null
-  };
-  usersDB.push(newUser);
-
-  // Send the verification email
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject: 'BTMS: Verify Your Vendor Account',
-    text: `Welcome to BTMS, ${companyName}! Your registration verification code is: ${otp}`
-  };
-
-  try {
-    await transporter.sendMail(mailOptions);
-    res.json({ success: true, message: "Registration successful. Please check your email for the OTP." });
-  } catch (error) {
-    console.error("Email error:", error);
-    res.status(500).json({ success: false, message: "Failed to send verification email." });
-  }
-});
-
-// 4. OTP VERIFICATION ROUTE
-app.post('/api/auth/verify-email', (req, res) => {
-  const { email, otp } = req.body;
-
-  const user = usersDB.find(u => u.email === email);
-  
-  if (!user) return res.status(404).json({ success: false, message: "User not found" });
-  if (user.otp !== otp) return res.status(400).json({ success: false, message: "Invalid OTP" });
-
-  // Update status and clear the OTP
-  user.status = 'PENDING_DOCS';
-  user.otp = null;
-
-  res.json({ success: true, message: "Email verified successfully! Please upload your compliance documents." });
 });
