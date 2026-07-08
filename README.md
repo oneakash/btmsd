@@ -56,6 +56,28 @@ CORE_PEER_CLIENT_CONNTIMEOUT=1200s ./network.sh deployCC -ccn btms -ccp ../../ch
 
 ```
 
+### 2. Configure Environment Variables
+
+You must create `.env` files locally, as they are not tracked in version control.
+
+**Backend (`backend/.env`):**
+
+```env
+PORT=5000
+JWT_SECRET=your_super_secret_key
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_gmail_app_password
+
+```
+
+**Frontend (`frontend/.env`):**
+
+```env
+REACT_APP_PINATA_API_KEY=your_pinata_api_key
+REACT_APP_PINATA_SECRET_API_KEY=your_pinata_secret_key
+
+```
+
 ### 2. Start the Backend API
 
 Open a new terminal, install the dependencies, and start the Express server:
