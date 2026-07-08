@@ -78,7 +78,20 @@ REACT_APP_PINATA_SECRET_API_KEY=your_pinata_secret_key
 
 ```
 
-### 2. Start the Backend API
+### 3. Build and Launch the Containers
+
+Navigate to the root of this project (`fabric-btms`) and spin up the bridged network:
+
+```bash
+docker-compose up --build -d
+
+```
+
+*The backend API will mount the Fabric wallet volumes, and the React UI will be served statically via an internal Nginx container on port 3000.*
+
+---
+
+#### Start the Backend API
 
 Open a new terminal, install the dependencies, and start the Express server:
 
@@ -91,7 +104,7 @@ node server.js
 
 *(The API will run on `http://localhost:5000`)*
 
-### 3. Start the Frontend Dashboard
+#### Start the Frontend Dashboard
 
 Open a final terminal, install the React dependencies, and fire up the UI:
 
