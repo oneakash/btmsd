@@ -1,0 +1,38 @@
+version: '3.8'
+
+# 1. The Bridge: Tell Docker this network already exists (created by Hyperledger)
+networks:
+  fabric_test:
+    external: true
+
+services:
+  # 2. THE NODE.JS BACKEND
+  btms-backend:
+    build:
+      context: ./backend
+    container_name: btms-backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      # THE MAGIC: Mount your local wallet and Fabric certificates directly into the container!
+      - ./backend/wallet:/usr/src/app/wallet
+      # NOTE: Adjust the path on the left to point to your actual fabric-samples organizations folder
+      - ../fabric-samples/test-network/organizations:/usr/src/app/organizations
+    networks:
+      - fabric_test
+    restart: unless-stopped
+
+  # 3. THE REACT FRONTEND (Served via Nginx)
+  btms-frontend:
+    build:
+      context: ./frontend
+    container_name: btms-frontend
+    ports:
+      - "3000:80" # Maps your computer's port 3000 to Nginx's internal port 80
+    depends_on:
+      - btms-backend
+    networks:
+      - fabric_test
+    restart: unless-stopped
