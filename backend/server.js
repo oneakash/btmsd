@@ -16,7 +16,16 @@ app.use(express.json());
 
 // 1. Temporary Off-Chain Database for Users
 // (In production, this would be MongoDB or PostgreSQL)
-const usersDB = []; 
+const adminPassword = bcrypt.hashSync('admin123', 10);
+const usersDB = [
+  { 
+    companyName: 'Procuring Entity', 
+    email: 'admin@btms.gov', 
+    password: adminPassword, 
+    role: 'admin', 
+    status: 'FULLY_VERIFIED' 
+  }
+];
 
 // 2. Configure the Email Sender
 const transporter = nodemailer.createTransport({
@@ -147,13 +156,46 @@ app.post('/api/auth/verify-email', (req, res) => {
 });
 
 // Login Route to generate the JWT Badge
-app.post('/api/auth/login', (req, res) => {
-  const { role } = req.body; // 'admin' or 'vendor'
+// 2. REAL SECURE LOGIN ROUTE
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
   
-  // Issue a token containing their role that expires in 2 hours
-  const token = jwt.sign({ role: role }, JWT_SECRET, { expiresIn: '2h' });
+  // Find the user
+  const user = usersDB.find(u => u.email === email);
+  if (!user) return res.status(401).json({ success: false, message: "Invalid email or password" });
+
+  // Cryptographically check the password
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) return res.status(401).json({ success: false, message: "Invalid email or password" });
+
+  // SECURITY GATE: Block unverified users!
+  if (user.status === 'UNVERIFIED') {
+    return res.status(403).json({ success: false, message: "Access Denied: Please complete OTP verification first." });
+  }
+
+  // Inject the email AND status into the JWT Security Badge
+  const token = jwt.sign(
+    { email: user.email, role: user.role, status: user.status }, 
+    process.env.JWT_SECRET, 
+    { expiresIn: '2h' }
+  );
   
-  res.json({ success: true, token, role });
+  res.json({ success: true, token, role: user.role, status: user.status });
+});
+
+// 3. MANDATORY COMPLIANCE UPLOAD ROUTE (Secured for Vendors only)
+app.post('/api/auth/compliance', verifyRole('vendor'), (req, res) => {
+  const { docHash } = req.body;
+  
+  // Use the email securely extracted from the JWT token
+  const user = usersDB.find(u => u.email === req.user.email);
+  if (!user) return res.status(404).json({ success: false, message: "User not found" });
+  
+  // Save the IPFS CID to their profile and upgrade their status
+  user.docHash = docHash;
+  user.status = 'FULLY_VERIFIED'; // (In a real app, this goes to PENDING_ADMIN_APPROVAL)
+  
+  res.json({ success: true, message: "Trade License verified! Your account is fully unlocked." });
 });
 
 // 1. Publish a new Tender (Writes to Ledger)
